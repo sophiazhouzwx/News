@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased font-sans;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    @apply bg-amber-200/60 dark:bg-amber-700/40;
+  }
+
+  /* Refined scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-stone-300 dark:bg-stone-700 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-stone-400 dark:bg-stone-600;
+  }
+}
+
+@layer components {
+  /* Prose refinements for markdown content */
+  .prose h3 {
+    @apply font-serif text-xl font-normal tracking-tight mt-8 mb-3 first:mt-0;
+  }
+
+  .prose h2 {
+    @apply font-serif text-2xl font-normal tracking-tight mt-10 mb-4 first:mt-0;
+  }
+
+  .prose li {
+    @apply mb-2.5 leading-relaxed;
+  }
+
+  .prose strong {
+    @apply font-semibold;
+  }
+
+  .prose a {
+    @apply text-amber-700 dark:text-amber-500 no-underline hover:underline decoration-amber-700/30 underline-offset-2 transition-colors;
+  }
+
+  .prose table {
+    @apply text-sm;
+  }
+
+  .prose th {
+    @apply text-left font-medium text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-stone-800 pb-2;
+  }
+
+  .prose td {
+    @apply py-2 border-b border-stone-100 dark:border-stone-800/50;
+  }
+
+  /* Staggered fade-in for lists */
+  .stagger-fade > * {
+    animation: slideUp 0.4s ease-out forwards;
+    opacity: 0;
+  }
+  .stagger-fade > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-fade > *:nth-child(2) { animation-delay: 60ms; }
+  .stagger-fade > *:nth-child(3) { animation-delay: 120ms; }
+  .stagger-fade > *:nth-child(4) { animation-delay: 180ms; }
+  .stagger-fade > *:nth-child(5) { animation-delay: 240ms; }
+  .stagger-fade > *:nth-child(6) { animation-delay: 300ms; }
+  .stagger-fade > *:nth-child(n+7) { animation-delay: 360ms; }
+}
