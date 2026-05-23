@@ -15,7 +15,7 @@ from .personality_tracker import get_new_speeches_for_all_personalities
 from .livestream_tracker import get_new_livestreams_for_all_accounts
 from .summarizer import (
     summarize_news_digest, summarize_podcast_episode, summarize_livestream,
-    generate_daily_prediction, summarize_media,
+    generate_daily_prediction, generate_quant_prediction, summarize_media,
 )
 from .push_service import send_push_to_all
 
@@ -147,7 +147,7 @@ def daily_digest_job(force: bool = False):
                 return
 
         # =====================================================================
-        # STEP 0: Verify past predictions
+        # STEP 0: Verify past predictions + learn from history
         # =====================================================================
         logger.info("[0/5] Verifying past predictions...")
         try:
@@ -163,6 +163,18 @@ def daily_digest_job(force: bool = False):
         except Exception as e:
             logger.exception("Prediction verification failed — continuing")
             step_status["verify_predictions"] = f"FAILED: {e}"
+
+        # After verification, try to refit quant factor weights and snapshot
+        # cumulative model performance. Both are no-ops without enough data.
+        try:
+            from .quant_models import fit_weights_from_history, record_model_performance_snapshot
+            fit_result = fit_weights_from_history(db)
+            step_status["quant_weight_fit"] = f"{fit_result.get('status')}: {fit_result.get('samples', 0)} samples"
+            snap = record_model_performance_snapshot(db)
+            step_status["quant_perf_snapshot"] = snap.get("status", "unknown")
+        except Exception as e:
+            logger.exception("Quant learning loop failed — continuing")
+            step_status["quant_learning"] = f"FAILED: {e}"
 
         # =====================================================================
         # STEP 1: News Aggregation
@@ -369,9 +381,10 @@ def daily_digest_job(force: bool = False):
             except Exception:
                 logger.exception("Failed to get market context — continuing without it")
 
+            # --- 5a. Legacy LLM-driven prediction (source="news_discovery")
             pred_result, err = _run_with_timeout(
                 generate_daily_prediction, STEP_TIMEOUT_PREDICTION,
-                "Daily prediction generation",
+                "Daily prediction generation (LLM)",
                 news_summary["en"],
                 recent_predictions=history,
                 raw_articles=articles,
@@ -379,6 +392,7 @@ def daily_digest_job(force: bool = False):
             )
             if err:
                 step_status["predictions"] = err
+                prediction = None
             else:
                 prediction = DailyPrediction(
                     date=today,
@@ -403,13 +417,102 @@ def daily_digest_job(force: bool = False):
                         confidence_pct=item_data.get("confidence_pct"),
                         thesis=item_data.get("thesis", ""),
                         price_at_prediction=entry_price,
+                        source="news_discovery",
                     )
                     db.add(pi)
                     items_saved += 1
                 db.commit()
 
-                step_status["predictions"] = f"OK — {items_saved} stock calls saved"
-                logger.info("Prediction saved for %s with %d items", today, items_saved)
+                step_status["predictions"] = f"OK — {items_saved} LLM stock calls saved"
+                logger.info("LLM prediction saved for %s with %d items", today, items_saved)
+
+            # --- 5b. Quant model prediction (source="quant_v1") — runs in parallel
+            try:
+                from .quant_models import (
+                    MODEL_VERSION, run_quantitative_pipeline,
+                )
+
+                quant_items, qerr = _run_with_timeout(
+                    run_quantitative_pipeline, STEP_TIMEOUT_PREDICTION,
+                    "Quant model scoring",
+                    db, articles, history,
+                )
+                if qerr:
+                    step_status["quant_predictions"] = qerr
+                elif not quant_items:
+                    step_status["quant_predictions"] = "SKIPPED — no scorable candidates"
+                else:
+                    # Ask Claude to format the quant output as a narrative
+                    quant_report, rerr = _run_with_timeout(
+                        generate_quant_prediction, STEP_TIMEOUT_PREDICTION,
+                        "Quant report formatting",
+                        quant_items, market_ctx,
+                    )
+                    if rerr:
+                        logger.warning("Quant report formatting failed: %s", rerr)
+                        quant_report = {"en": "", "cn": ""}
+
+                    # If the LLM step failed, create a standalone DailyPrediction
+                    # to hang the quant items off of so they're still queryable.
+                    if prediction is None:
+                        prediction = DailyPrediction(
+                            date=today,
+                            prediction_en=quant_report.get("en", ""),
+                            prediction_cn=quant_report.get("cn", ""),
+                        )
+                        db.add(prediction)
+                        db.commit()
+                    else:
+                        # Append quant narrative below the LLM narrative so both
+                        # are viewable in the same prediction record.
+                        if quant_report.get("en"):
+                            prediction.prediction_en = (
+                                (prediction.prediction_en or "") +
+                                "\n\n---\n\n## Quant Model (quant_v1)\n\n" +
+                                quant_report["en"]
+                            )
+                        if quant_report.get("cn"):
+                            prediction.prediction_cn = (
+                                (prediction.prediction_cn or "") +
+                                "\n\n---\n\n## 量化模型 (quant_v1)\n\n" +
+                                quant_report["cn"]
+                            )
+                        db.commit()
+
+                    qsaved = 0
+                    for it in quant_items:
+                        pi = PredictionItem(
+                            prediction_id=prediction.id,
+                            ticker=it["ticker"],
+                            direction=it["direction"],
+                            timeframe_days=int(it["timeframe_days"]),
+                            confidence_pct=it.get("confidence_pct"),
+                            thesis=it.get("thesis", ""),
+                            source=MODEL_VERSION,
+                            price_at_prediction=it.get("price_at_prediction"),
+                            model_version=it.get("model_version", MODEL_VERSION),
+                            composite_score=it.get("composite_score"),
+                            momentum_score=it.get("momentum_score"),
+                            value_score=it.get("value_score"),
+                            volatility_score=it.get("volatility_score"),
+                            quality_score=it.get("quality_score"),
+                            sentiment_score=it.get("sentiment_score"),
+                            rsi_at_prediction=it.get("rsi_at_prediction"),
+                            macd_signal_at_prediction=it.get("macd_signal_at_prediction", ""),
+                            confidence_interval_low=it.get("confidence_interval_low"),
+                            confidence_interval_high=it.get("confidence_interval_high"),
+                            predicted_change_pct=it.get("predicted_change_pct"),
+                            threshold_pct=it.get("threshold_pct"),
+                        )
+                        db.add(pi)
+                        qsaved += 1
+                    db.commit()
+                    step_status["quant_predictions"] = f"OK — {qsaved} quant stock calls saved"
+                    logger.info("Quant prediction saved for %s with %d items", today, qsaved)
+            except Exception as e:
+                logger.exception("Quant pipeline failed — continuing")
+                step_status["quant_predictions"] = f"FAILED: {e}"
+                db.rollback()
         except Exception as e:
             logger.exception("Prediction generation failed — continuing to save digest")
             step_status["predictions"] = f"FAILED: {e}"

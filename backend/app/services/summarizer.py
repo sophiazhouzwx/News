@@ -291,6 +291,96 @@ Rules:
     return {"en": en_part, "cn": cn_part}
 
 
+def generate_quant_prediction(
+    quant_items: list[dict[str, Any]],
+    market_context: str = "",
+) -> dict[str, str]:
+    """Take quant model's stock calls and ask Claude ONLY to format them
+    into a bilingual narrative report. Claude does not pick stocks here.
+    Returns {"en": ..., "cn": ...}.
+    """
+    if not quant_items:
+        return {"en": "", "cn": ""}
+
+    rows_text_en = []
+    rows_text_cn = []
+    for it in quant_items:
+        line_common = (
+            f"{it['ticker']} | dir={it['direction']} | "
+            f"confidence={it.get('confidence_pct', 0)}% | "
+            f"timeframe={it.get('timeframe_days', 14)}d | "
+            f"composite={it.get('composite_score'):.2f} | "
+            f"expected_move={it.get('predicted_change_pct')}% | "
+            f"momentum={it.get('momentum_score')} value={it.get('value_score')} "
+            f"vol={it.get('volatility_score')} quality={it.get('quality_score')} "
+            f"technical={it.get('technical_score')} sentiment={it.get('sentiment_score')} | "
+            f"RSI={it.get('rsi_at_prediction')} MACD={it.get('macd_signal_at_prediction')} | "
+            f"price=${it.get('price_at_prediction')} "
+            f"CI=[{it.get('confidence_interval_low')}, {it.get('confidence_interval_high')}]"
+        )
+        rows_text_en.append("- " + line_common + " — " + it.get("thesis", ""))
+        rows_text_cn.append("- " + line_common)
+
+    items_blob = "\n".join(rows_text_en)
+    market_block = f"\n{market_context}\n" if market_context else ""
+
+    prompt = f"""You are translating a quantitative model's output into a readable bilingual report.
+
+The model has ALREADY decided which stocks to call, the direction, confidence,
+and timeframe. Do NOT change these decisions. Do NOT add or remove stocks.
+Your job is purely to format the data into clean markdown.
+
+QUANT MODEL OUTPUT (one row per stock call):
+{items_blob}
+{market_block}
+---
+
+## English Predictions
+
+### Model Snapshot
+1-2 sentences describing the overall posture (how many bulls vs bears, what
+factors are driving the calls, anything notable about the market regime).
+
+### Stocks to Watch
+Table:
+| Ticker | Direction | Confidence | Timeframe | Expected Move | Why |
+One row per stock from the quant output, in the same order. The "Why" column
+must paraphrase the thesis using the factor scores given (RSI, MACD,
+momentum, sentiment) — not made-up reasoning.
+
+*Quantitative model output. Not financial advice.*
+
+---
+
+## 中文预测
+
+### 模型快照
+### 值得关注的股票
+
+(Mirror English; use the same table.)
+
+*量化模型输出，仅供参考，不构成投资建议。*
+
+Rules:
+- Never invent tickers, prices, or factor values. Only use what is in the QUANT MODEL OUTPUT above.
+- Keep the table rows in the same order as the input.
+- If a thesis cites a factor, the corresponding score in the input must back it up."""
+
+    client = _get_client()
+    response = client.messages.create(
+        model=_get_model(),
+        max_tokens=4000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    full_text = ""
+    for block in response.content:
+        if getattr(block, "type", "") == "text":
+            full_text += block.text
+
+    en_part, cn_part = _split_bilingual(full_text)
+    return {"en": en_part, "cn": cn_part}
+
+
 def generate_daily_prediction(
     news_summary_en: str,
     recent_predictions: list[dict[str, Any]] | None = None,
