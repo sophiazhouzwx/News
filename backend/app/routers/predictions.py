@@ -51,6 +51,43 @@ def prediction_accuracy(
     }
 
 
+@router.get("/calibration")
+def prediction_calibration(
+    model_version: str | None = Query(None, description="Filter to a specific model version"),
+    source: str | None = Query(None, description="Filter by source"),
+    db: Session = Depends(get_db),
+):
+    """Confidence calibration analysis.
+
+    Buckets verified PredictionItems by claimed confidence, reports observed
+    hit rate per bucket. A well-calibrated model has gap_pct ≈ 0 everywhere.
+    Negative gap = overconfident in that bucket.
+    """
+    from ..shared.calibration import brier_score, calibration_curve
+
+    q = db.query(PredictionItem).filter(
+        PredictionItem.outcome.in_(["hit", "miss"]),
+        PredictionItem.confidence_pct.is_not(None),
+    )
+    if model_version:
+        q = q.filter(PredictionItem.model_version == model_version)
+    if source:
+        q = q.filter(PredictionItem.source == source)
+    rows = q.all()
+
+    items = [
+        {"confidence_pct": float(r.confidence_pct), "outcome": r.outcome}
+        for r in rows
+    ]
+    return {
+        "model_version": model_version,
+        "source": source,
+        "n_items": len(items),
+        "brier_score": brier_score(items),
+        "curve": calibration_curve(items),
+    }
+
+
 @router.get("/model-performance")
 def model_performance(
     model_version: str | None = Query(None),

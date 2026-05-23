@@ -186,7 +186,23 @@ def discover_candidate_tickers(
         for sym in DEFAULT_CANDIDATES:
             add(sym)
 
-    return candidates[:max_candidates]
+    candidates = candidates[:max_candidates]
+
+    # Opt-in: drop tickers within their earnings noise window.
+    try:
+        if get_settings().quant_suppress_earnings_window:
+            from ..shared.calendar_utils import filter_out_earnings_window
+            kept, suppressed = filter_out_earnings_window(candidates)
+            if suppressed:
+                logger.info(
+                    "Earnings suppression dropped %d tickers: %s",
+                    len(suppressed), ", ".join(suppressed),
+                )
+            candidates = kept
+    except Exception:
+        logger.exception("Earnings suppression failed — proceeding with full candidate list")
+
+    return candidates
 
 
 # ---------------------------------------------------------------------------

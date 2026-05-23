@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     prediction_extended_thinking: bool = False
     prediction_thinking_budget: int = 8000
 
+    # --- Opt-in quant improvements (default off so behavior is unchanged) ---
+    # Filter tickers within ±2 days of earnings from the quant candidate pool.
+    quant_suppress_earnings_window: bool = False
+    # Pull the model's confidence toward observed hit-rate per bucket.
+    quant_use_calibration_shrinkage: bool = False
+
     xiaohongshu_cookie: str = ""
     rsshub_base_url: str = "https://rsshub.app"
 
