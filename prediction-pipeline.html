@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prediction Pipeline</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #dde3ec;
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+      padding: 48px 32px 64px;
+      min-height: 100vh;
+    }
+
+    /* ── OUTER CARD ── */
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.10), 0 12px 40px rgba(0,0,0,0.09);
+      overflow: hidden;
+      max-width: 1060px;
+      margin: 0 auto;
+    }
+
+    /* ── TITLE BAR ── */
+    .title-bar {
+      background: #0f172a;
+      color: white;
+      padding: 18px 26px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .title-bar h1 {
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      line-height: 1.2;
+    }
+    .title-bar h1 em {
+      font-style: normal;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+    .title-desc {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 5px;
+      line-height: 1.6;
+    }
+    .title-meta {
+      font-size: 10.5px;
+      color: #475569;
+      text-align: right;
+      line-height: 1.7;
+      flex-shrink: 0;
+    }
+    .title-meta b { color: #94a3b8; }
+
+    /* ── SECTION ── */
+    .section { border-top: 1px solid #f1f5f9; }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 20px;
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .sh-right {
+      font-weight: 500;
+      font-size: 10px;
+      opacity: 0.75;
+      letter-spacing: 0.3px;
+      text-transform: none;
+      font-family: 'Plus Jakarta Sans', monospace;
+    }
+
+    .hdr-input  { background: #1e40af; }
+    .hdr-llm    { background: #92400e; }
+    .hdr-quant  { background: #3730a3; }
+    .hdr-merge  { background: #065f46; }
+
+    .section-body {
+      padding: 18px 22px 20px;
+      background: #fafafa;
+    }
+
+    /* ── INTER-SECTION CONNECTOR ── */
+    .v-connector {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 6px 0;
+      background: white;
+      border-top: 1px solid #f1f5f9;
+      border-bottom: 1px solid #f1f5f9;
+      color: #94a3b8;
+      font-size: 18px;
+    }
+
+    /* ── ROW ── */
+    .row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+      flex-wrap: nowrap;
+    }
+    .row + .row { margin-top: 14px; }
+    .row-center { justify-content: center; }
+
+    /* ── ARROWS ── */
+    .arr {
+      color: #94a3b8;
+      font-size: 18px;
+      padding: 0 5px;
+      flex-shrink: 0;
+      align-self: center;
+      line-height: 1;
+      user-select: none;
+    }
+    .arr-plus {
+      color: #cbd5e1;
+      font-size: 20px;
+      padding: 0 10px;
+      align-self: center;
+      flex-shrink: 0;
+      line-height: 1;
+      font-weight: 300;
+    }
+    .down-arr {
+      text-align: center;
+      color: #94a3b8;
+      font-size: 16px;
+      padding: 4px 0;
+      line-height: 1;
+    }
+
+    /* ── NODE ── */
+    .node {
+      border-radius: 7px;
+      padding: 9px 14px;
+      flex-shrink: 0;
+      min-width: 0;
+    }
+    .node-role {
+      display: block;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.7px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+      opacity: 0.6;
+    }
+    .node-name {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .node-sub {
+      display: block;
+      font-size: 9.5px;
+      font-weight: 400;
+      margin-top: 3px;
+      opacity: 0.65;
+      line-height: 1.4;
+    }
+
+    /* ── NODE COLOR PALETTE ── */
+    /* Inputs */
+    .n-in       { background: #dbeafe; color: #1e3a8a; }
+    /* LLM path */
+    .n-l-proc   { background: #fef3c7; color: #78350f; }
+    .n-l-ai     { background: #f59e0b; color: #1c1917; }
+    .n-l-db     { background: #fde68a; color: #78350f; }
+    /* Quant path */
+    .n-q-proc   { background: #e0e7ff; color: #1e1b4b; }
+    .n-q-ai     { background: #6366f1; color: white; }
+    .n-q-db     { background: #c7d2fe; color: #1e1b4b; }
+    /* Merge */
+    .n-m-rec    { background: #d1fae5; color: #064e3b; }
+    .n-m-field  { background: #a7f3d0; color: #064e3b; }
+    /* Loop */
+    .n-loop     { background: #f1f5f9; color: #334155; }
+
+    /* ── FACTOR ROW ── */
+    .factor-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+      margin-left: 186px; /* align under Factor Scoring node */
+    }
+    .factor-chip {
+      background: #c7d2fe;
+      color: #1e1b4b;
+      border-radius: 5px;
+      padding: 5px 10px;
+      font-size: 10px;
+      font-weight: 700;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .factor-chip span {
+      display: block;
+      font-size: 8.5px;
+      font-weight: 500;
+      opacity: 0.7;
+      margin-top: 1px;
+    }
+    .factor-label {
+      font-size: 9px;
+      color: #94a3b8;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      align-self: center;
+      flex-shrink: 0;
+      margin-right: 4px;
+    }
+
+    /* ── NOTE BANNER (resilience / learning loop info) ── */
+    .note-banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 10px;
+      color: #78350f;
+      line-height: 1.5;
+      margin-top: 14px;
+    }
+    .note-banner.blue {
+      background: #eff6ff;
+      border-color: #bfdbfe;
+      color: #1e3a8a;
+    }
+    .note-banner.purple {
+      background: #eef2ff;
+      border-color: #c7d2fe;
+      color: #1e1b4b;
+    }
+    .note-banner.green {
+      background: #ecfdf5;
+      border-color: #a7f3d0;
+      color: #064e3b;
+    }
+    .note-icon { flex-shrink: 0; font-size: 13px; }
+
+    /* ── LEGEND ── */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 20px;
+      padding: 14px 22px;
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+    }
+    .legend-title {
+      width: 100%;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: #64748b;
+      font-weight: 500;
+    }
+    .l-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- ══ TITLE ══ -->
+  <div class="title-bar">
+    <div>
+      <h1>Prediction Pipeline &nbsp;<em>· Step 5 of 5</em></h1>
+      <div class="title-desc">
+        scheduler.py → daily_digest_job() &nbsp;·&nbsp;
+        Two independent models: LLM (5a) then Quant (5b) &nbsp;·&nbsp;
+        Both outputs merged into one DailyPrediction record
+      </div>
+    </div>
+    <div class="title-meta">
+      <b>Timeout</b> &nbsp;3 min per model<br>
+      <b>Sources</b> &nbsp;news_discovery · quant_v1<br>
+      <b>Triggers next day</b> &nbsp;Step 0 verify loop
+    </div>
+  </div>
+
+  <!-- ══ SECTION 1: INPUTS ══ -->
+  <div class="section">
+    <div class="section-header hdr-input">
+      <span>Inputs &mdash; shared by both paths</span>
+      <span class="sh-right">assembled at start of Step 5</span>
+    </div>
+    <div class="section-body">
+      <div class="row row-center">
+
+        <div class="node n-in">
+          <span class="node-role">AI Output · Step 1</span>
+          <span class="node-name">News Summary</span>
+          <span class="node-sub">English · bilingual Claude digest</span>
+        </div>
+
+        <div class="arr-plus">+</div>
+
+        <div class="node n-in">
+          <span class="node-role">API · yfinance</span>
+          <span class="node-name">Market Context</span>
+          <span class="node-sub">S&amp;P 500 · NASDAQ · VIX · SOX</span>
+        </div>
+
+        <div class="arr-plus">+</div>
+
+        <div class="node n-in">
+          <span class="node-role">Database</span>
+          <span class="node-name">Prediction History</span>
+          <span class="node-sub">last 5 days · with verified outcomes</span>
+        </div>
+
+        <div class="arr-plus">+</div>
+
+        <div class="node n-in">
+          <span class="node-role">Pipeline · Step 1</span>
+          <span class="node-name">Raw Articles</span>
+          <span class="node-sub">top 30 · scored &amp; ranked</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- connector -->
+  <div class="v-connector"><span>↓</span></div>
+
+  <!-- ══ SECTION 2: LLM PATH ══ -->
+  <div class="section">
+    <div class="section-header hdr-llm">
+      <span>LLM Path &nbsp;5a &nbsp;— &nbsp;generate_daily_prediction()</span>
+      <span class="sh-right">summarizer.py &nbsp;·&nbsp; source: news_discovery &nbsp;·&nbsp; timeout: 3 min</span>
+    </div>
+    <div class="section-body">
+
+      <div class="row">
+
+        <div class="node n-l-proc">
+          <span class="node-role">Preparation</span>
+          <span class="node-name">Compile Context</span>
+          <span class="node-sub">news summary + market<br>+ history + articles</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-l-ai">
+          <span class="node-role">AI Model · Claude</span>
+          <span class="node-name">Extended Thinking</span>
+          <span class="node-sub">STEP_TIMEOUT_PREDICTION = 180 s</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-l-proc">
+          <span class="node-role">Parse</span>
+          <span class="node-name">Extract Stock Calls</span>
+          <span class="node-sub">ticker · direction · confidence<br>timeframe_days · thesis</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-l-proc">
+          <span class="node-role">API · yfinance</span>
+          <span class="node-name">Fetch Entry Prices</span>
+          <span class="node-sub">get_price() per ticker<br>price_at_prediction</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-l-db">
+          <span class="node-role">Database · PredictionItem</span>
+          <span class="node-name">Save LLM Calls</span>
+          <span class="node-sub">source = "news_discovery"<br>buy / sell / hold</span>
+        </div>
+
+      </div>
+
+      <div class="note-banner" style="margin-top:14px;">
+        <span class="note-icon">📝</span>
+        <span>
+          Claude also generates <b>prediction_en</b> and <b>prediction_cn</b> (bilingual narrative) stored on the DailyPrediction record.
+          If this step fails, a fallback DailyPrediction is created by the Quant path so items remain queryable.
+        </span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- connector -->
+  <div class="v-connector"><span>↓</span></div>
+
+  <!-- ══ SECTION 3: QUANT PATH ══ -->
+  <div class="section">
+    <div class="section-header hdr-quant">
+      <span>Quant Path &nbsp;5b &nbsp;— &nbsp;run_quantitative_pipeline()</span>
+      <span class="sh-right">quant_models.py &nbsp;·&nbsp; source: quant_v1 &nbsp;·&nbsp; timeout: 3 min</span>
+    </div>
+    <div class="section-body">
+
+      <!-- Main flow row -->
+      <div class="row">
+
+        <div class="node n-q-proc">
+          <span class="node-role">Discovery</span>
+          <span class="node-name">Candidate Tickers</span>
+          <span class="node-sub">watchlist + article mentions<br>+ prior prediction tickers<br>max 12 per run</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-q-proc">
+          <span class="node-role">Compute · market_data.py</span>
+          <span class="node-name">Factor Scoring</span>
+          <span class="node-sub">compute_factor_scores()<br>+ technical indicators</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-q-proc">
+          <span class="node-role">Math</span>
+          <span class="node-name">Weighted Composite</span>
+          <span class="node-sub">Σ (factor × weight)<br>weights auto-fitted by Step 0</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-q-proc">
+          <span class="node-role">Rule · classifier</span>
+          <span class="node-name">Direction Signal</span>
+          <span class="node-sub">BULL &gt; 0.6<br>BEAR &lt; −0.6 &nbsp;· else HOLD</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-q-ai">
+          <span class="node-role">AI Model · Claude</span>
+          <span class="node-name">Narrative Formatter</span>
+          <span class="node-sub">generate_quant_prediction()<br>EN + CN report</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-q-db">
+          <span class="node-role">Database · PredictionItem</span>
+          <span class="node-name">Save Quant Calls</span>
+          <span class="node-sub">source = "quant_v1"<br>+ all factor scores stored</span>
+        </div>
+
+      </div>
+
+      <!-- Factor weight chips — aligned under "Factor Scoring" (2nd node) -->
+      <div class="factor-row">
+        <span class="factor-label">Default weights →</span>
+        <div class="factor-chip">Momentum<span>30%</span></div>
+        <div class="factor-chip">Technical<span>20%</span></div>
+        <div class="factor-chip">Quality<span>15%</span></div>
+        <div class="factor-chip">Sentiment<span>15%</span></div>
+        <div class="factor-chip">Value<span>10%</span></div>
+        <div class="factor-chip">Volatility<span>10%</span></div>
+      </div>
+
+      <div class="note-banner purple" style="margin-top:14px;">
+        <span class="note-icon">🧠</span>
+        <span>
+          <b>Sentiment score</b> is the only place Claude is called inside the Quant path:
+          it rates news sentiment per ticker on [−1, +1] via <code>score_news_sentiment()</code>
+          in quant_models.py, then feeds it as one of the 6 factors.
+          All other factors are computed from market data (yfinance).
+        </span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- connector -->
+  <div class="v-connector"><span>↓</span></div>
+
+  <!-- ══ SECTION 4: MERGE & SAVE ══ -->
+  <div class="section">
+    <div class="section-header hdr-merge">
+      <span>Merge &amp; Save &mdash; always written, even if one path fails</span>
+      <span class="sh-right">database.py &nbsp;·&nbsp; DailyPrediction + PredictionItem tables</span>
+    </div>
+    <div class="section-body">
+
+      <div class="row row-center">
+
+        <div class="node n-m-rec">
+          <span class="node-role">Database · one record per day</span>
+          <span class="node-name">DailyPrediction</span>
+          <span class="node-sub">date · prediction_en · prediction_cn</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-m-field">
+          <span class="node-role">Append</span>
+          <span class="node-name">Quant Narrative</span>
+          <span class="node-sub">appended below LLM text<br>with "---" separator in EN + CN</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-m-rec">
+          <span class="node-role">Database · one row per ticker</span>
+          <span class="node-name">PredictionItems</span>
+          <span class="node-sub">ticker · direction · confidence<br>entry_price · source · all factor scores<br>RSI · MACD · confidence interval</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-loop">
+          <span class="node-role">Feedback Loop · Step 0 next day</span>
+          <span class="node-name">Verification</span>
+          <span class="node-sub">verify_prediction_items()<br>outcomes resolved → weights refitted</span>
+        </div>
+
+      </div>
+
+      <div class="note-banner green" style="margin-top:14px;">
+        <span class="note-icon">🔄</span>
+        <span>
+          All PredictionItems tagged with <b>source</b> ("news_discovery" or "quant_v1") and <b>model_version</b>
+          so verified outcomes remain attributable to the exact scoring math that produced them.
+          The next day's Step 0 resolves outcomes and refits quant factor weights via <b>fit_weights_from_history()</b>.
+        </span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══ LEGEND ══ -->
+  <div class="legend">
+    <div class="legend-title">Legend</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#dbeafe"></div>Input data</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#fef3c7"></div>Process (LLM path)</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#f59e0b"></div>Claude · LLM path</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#fde68a"></div>Database write (LLM path)</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#e0e7ff"></div>Process (Quant path)</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#6366f1"></div>Claude · Quant path</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#c7d2fe"></div>Factor weights / DB write (Quant)</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#d1fae5"></div>Merge &amp; save</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#f1f5f9"></div>Feedback loop</div>
+  </div>
+
+</div>
+</body>
+</html>

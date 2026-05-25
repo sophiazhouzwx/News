@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>预测流水线</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #dde3ec;
+      font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+      padding: 48px 32px 64px;
+      min-height: 100vh;
+    }
+
+    /* ── OUTER CARD ── */
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.10), 0 12px 40px rgba(0,0,0,0.09);
+      overflow: hidden;
+      max-width: 1060px;
+      margin: 0 auto;
+    }
+
+    /* ── TITLE BAR ── */
+    .title-bar {
+      background: #0f172a;
+      color: white;
+      padding: 18px 26px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .title-bar h1 {
+      font-size: 17px;
+      font-weight: 900;
+      letter-spacing: 0;
+      line-height: 1.3;
+    }
+    .title-bar h1 em {
+      font-style: normal;
+      color: #94a3b8;
+      font-weight: 400;
+    }
+    .title-desc {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 5px;
+      line-height: 1.7;
+    }
+    .title-meta {
+      font-size: 10.5px;
+      color: #475569;
+      text-align: right;
+      line-height: 1.8;
+      flex-shrink: 0;
+    }
+    .title-meta b { color: #94a3b8; }
+
+    /* ── SECTION ── */
+    .section { border-top: 1px solid #f1f5f9; }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 20px;
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+    .sh-right {
+      font-weight: 400;
+      font-size: 10px;
+      opacity: 0.75;
+      letter-spacing: 0;
+      font-family: 'Noto Sans SC', monospace;
+    }
+
+    .hdr-input  { background: #1e40af; }
+    .hdr-llm    { background: #92400e; }
+    .hdr-quant  { background: #3730a3; }
+    .hdr-merge  { background: #065f46; }
+
+    .section-body {
+      padding: 18px 22px 20px;
+      background: #fafafa;
+    }
+
+    /* ── INTER-SECTION CONNECTOR ── */
+    .v-connector {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 6px 0;
+      background: white;
+      border-top: 1px solid #f1f5f9;
+      border-bottom: 1px solid #f1f5f9;
+      color: #94a3b8;
+      font-size: 18px;
+    }
+
+    /* ── ROW ── */
+    .row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+      flex-wrap: nowrap;
+    }
+    .row + .row { margin-top: 14px; }
+    .row-center { justify-content: center; }
+
+    /* ── ARROWS ── */
+    .arr {
+      color: #94a3b8;
+      font-size: 18px;
+      padding: 0 5px;
+      flex-shrink: 0;
+      align-self: center;
+      line-height: 1;
+      user-select: none;
+    }
+    .arr-plus {
+      color: #cbd5e1;
+      font-size: 20px;
+      padding: 0 10px;
+      align-self: center;
+      flex-shrink: 0;
+      line-height: 1;
+      font-weight: 300;
+    }
+
+    /* ── NODE ── */
+    .node {
+      border-radius: 7px;
+      padding: 9px 14px;
+      flex-shrink: 0;
+      min-width: 0;
+    }
+    .node-role {
+      display: block;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0;
+      margin-bottom: 4px;
+      opacity: 0.6;
+    }
+    .node-name {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+    .node-sub {
+      display: block;
+      font-size: 10px;
+      font-weight: 400;
+      margin-top: 3px;
+      opacity: 0.65;
+      line-height: 1.5;
+    }
+
+    /* ── NODE COLOR PALETTE ── */
+    .n-in       { background: #dbeafe; color: #1e3a8a; }
+    .n-l-proc   { background: #fef3c7; color: #78350f; }
+    .n-l-ai     { background: #f59e0b; color: #1c1917; }
+    .n-l-db     { background: #fde68a; color: #78350f; }
+    .n-q-proc   { background: #e0e7ff; color: #1e1b4b; }
+    .n-q-ai     { background: #6366f1; color: white; }
+    .n-q-db     { background: #c7d2fe; color: #1e1b4b; }
+    .n-m-rec    { background: #d1fae5; color: #064e3b; }
+    .n-m-field  { background: #a7f3d0; color: #064e3b; }
+    .n-loop     { background: #f1f5f9; color: #334155; }
+
+    /* ── FACTOR ROW ── */
+    .factor-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+      margin-left: 186px;
+      align-items: center;
+    }
+    .factor-chip {
+      background: #c7d2fe;
+      color: #1e1b4b;
+      border-radius: 5px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .factor-chip span {
+      display: block;
+      font-size: 9px;
+      font-weight: 500;
+      opacity: 0.7;
+      margin-top: 1px;
+    }
+    .factor-label {
+      font-size: 9px;
+      color: #94a3b8;
+      font-weight: 600;
+      letter-spacing: 0;
+      align-self: center;
+      flex-shrink: 0;
+      margin-right: 4px;
+    }
+
+    /* ── NOTE BANNER ── */
+    .note-banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 11px;
+      color: #78350f;
+      line-height: 1.6;
+      margin-top: 14px;
+    }
+    .note-banner.purple {
+      background: #eef2ff;
+      border-color: #c7d2fe;
+      color: #1e1b4b;
+    }
+    .note-banner.green {
+      background: #ecfdf5;
+      border-color: #a7f3d0;
+      color: #064e3b;
+    }
+    .note-icon { flex-shrink: 0; font-size: 13px; }
+
+    /* ── LEGEND ── */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 20px;
+      padding: 14px 22px;
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+    }
+    .legend-title {
+      width: 100%;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: #64748b;
+      font-weight: 500;
+    }
+    .l-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- ══ TITLE ══ -->
+  <div class="title-bar">
+    <div>
+      <h1>预测流水线 &nbsp;<em>· 第 5 步，共 5 步</em></h1>
+      <div class="title-desc">
+        scheduler.py → daily_digest_job() &nbsp;·&nbsp;
+        两个独立模型顺序执行：LLM 路径（5a）→ 量化路径（5b） &nbsp;·&nbsp;
+        两路输出合并至同一条 DailyPrediction 记录
+      </div>
+    </div>
+    <div class="title-meta">
+      <b>超时限制</b> &nbsp;每个模型 3 分钟<br>
+      <b>数据来源标签</b> &nbsp;news_discovery · quant_v1<br>
+      <b>次日触发</b> &nbsp;第 0 步结果验证循环
+    </div>
+  </div>
+
+  <!-- ══ SECTION 1: INPUTS ══ -->
+  <div class="section">
+    <div class="section-header hdr-input">
+      <span>输入数据 — 两路模型共享</span>
+      <span class="sh-right">在第 5 步启动时组装</span>
+    </div>
+    <div class="section-body">
+      <div class="row row-center">
+
+        <div class="node n-in">
+          <span class="node-role">AI 输出 · 第 1 步</span>
+          <span class="node-name">新闻摘要</span>
+          <span class="node-sub">英文 · Claude 双语摘要</span>
+        </div>
+
+        <div class="arr-plus">+</div>
+
+        <div class="node n-in">
+          <span class="node-role">API · yfinance</span>
+          <span class="node-name">市场行情</span>
+          <span class="node-sub">标普500 · 纳斯达克 · VIX · 费城半导体</span>
+        </div>
+
+        <div class="arr-plus">+</div>
+
+        <div class="node n-in">
+          <span class="node-role">数据库</span>
+          <span class="node-name">预测历史</span>
+          <span class="node-sub">最近 5 天 · 含已验证结果</span>
+        </div>
+
+        <div class="arr-plus">+</div>
+
+        <div class="node n-in">
+          <span class="node-role">流水线 · 第 1 步</span>
+          <span class="node-name">原始文章</span>
+          <span class="node-sub">前 30 篇 · 评分排序后</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- connector -->
+  <div class="v-connector"><span>↓</span></div>
+
+  <!-- ══ SECTION 2: LLM PATH ══ -->
+  <div class="section">
+    <div class="section-header hdr-llm">
+      <span>LLM 路径 &nbsp;5a &nbsp;— &nbsp;generate_daily_prediction()</span>
+      <span class="sh-right">summarizer.py &nbsp;·&nbsp; 来源标签: news_discovery &nbsp;·&nbsp; 超时: 3 分钟</span>
+    </div>
+    <div class="section-body">
+
+      <div class="row">
+
+        <div class="node n-l-proc">
+          <span class="node-role">准备</span>
+          <span class="node-name">组装上下文</span>
+          <span class="node-sub">新闻摘要 + 市场行情<br>+ 历史记录 + 原始文章</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-l-ai">
+          <span class="node-role">AI 模型 · Claude</span>
+          <span class="node-name">扩展思考</span>
+          <span class="node-sub">STEP_TIMEOUT_PREDICTION = 180 s</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-l-proc">
+          <span class="node-role">解析</span>
+          <span class="node-name">提取股票信号</span>
+          <span class="node-sub">代码 · 方向 · 置信度<br>持仓天数 · 投资论据</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-l-proc">
+          <span class="node-role">API · yfinance</span>
+          <span class="node-name">获取入场价格</span>
+          <span class="node-sub">get_price() 逐标的查询<br>price_at_prediction</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-l-db">
+          <span class="node-role">数据库 · PredictionItem</span>
+          <span class="node-name">保存 LLM 预测</span>
+          <span class="node-sub">来源 = "news_discovery"<br>买入 / 卖出 / 持有</span>
+        </div>
+
+      </div>
+
+      <div class="note-banner">
+        <span class="note-icon">📝</span>
+        <span>
+          Claude 同时生成 <b>prediction_en</b> 和 <b>prediction_cn</b>（双语叙述），存储于 DailyPrediction 记录中。
+          若该步骤失败，量化路径将自动创建备用 DailyPrediction，确保预测条目仍可正常查询。
+        </span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- connector -->
+  <div class="v-connector"><span>↓</span></div>
+
+  <!-- ══ SECTION 3: QUANT PATH ══ -->
+  <div class="section">
+    <div class="section-header hdr-quant">
+      <span>量化路径 &nbsp;5b &nbsp;— &nbsp;run_quantitative_pipeline()</span>
+      <span class="sh-right">quant_models.py &nbsp;·&nbsp; 来源标签: quant_v1 &nbsp;·&nbsp; 超时: 3 分钟</span>
+    </div>
+    <div class="section-body">
+
+      <div class="row">
+
+        <div class="node n-q-proc">
+          <span class="node-role">候选发现</span>
+          <span class="node-name">候选标的</span>
+          <span class="node-sub">自选股 + 文章提及<br>+ 历史预测标的<br>每次最多 12 个</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-q-proc">
+          <span class="node-role">计算 · market_data.py</span>
+          <span class="node-name">因子评分</span>
+          <span class="node-sub">compute_factor_scores()<br>+ 技术指标</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-q-proc">
+          <span class="node-role">数学运算</span>
+          <span class="node-name">加权综合评分</span>
+          <span class="node-sub">Σ（因子 × 权重）<br>权重由第 0 步自动拟合</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-q-proc">
+          <span class="node-role">规则 · 分类器</span>
+          <span class="node-name">方向信号</span>
+          <span class="node-sub">做多 &gt; 0.6<br>做空 &lt; −0.6 &nbsp;· 否则持有</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-q-ai">
+          <span class="node-role">AI 模型 · Claude</span>
+          <span class="node-name">叙述格式化</span>
+          <span class="node-sub">generate_quant_prediction()<br>中英双语报告</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-q-db">
+          <span class="node-role">数据库 · PredictionItem</span>
+          <span class="node-name">保存量化预测</span>
+          <span class="node-sub">来源 = "quant_v1"<br>含全部因子评分</span>
+        </div>
+
+      </div>
+
+      <!-- Factor weight chips -->
+      <div class="factor-row">
+        <span class="factor-label">默认权重 →</span>
+        <div class="factor-chip">动量<span>30%</span></div>
+        <div class="factor-chip">技术面<span>20%</span></div>
+        <div class="factor-chip">质量<span>15%</span></div>
+        <div class="factor-chip">情绪<span>15%</span></div>
+        <div class="factor-chip">估值<span>10%</span></div>
+        <div class="factor-chip">波动率<span>10%</span></div>
+      </div>
+
+      <div class="note-banner purple">
+        <span class="note-icon">🧠</span>
+        <span>
+          <b>情绪评分</b>是量化路径中唯一调用 Claude 的环节：通过 quant_models.py 中的
+          <code>score_news_sentiment()</code> 对每个标的新闻情绪进行 [−1, +1] 评分，并作为 6 个因子之一输入模型。
+          其余所有因子均通过市场数据（yfinance）计算得出。
+        </span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- connector -->
+  <div class="v-connector"><span>↓</span></div>
+
+  <!-- ══ SECTION 4: MERGE & SAVE ══ -->
+  <div class="section">
+    <div class="section-header hdr-merge">
+      <span>合并 &amp; 保存 — 即使某一路径失败也始终写入</span>
+      <span class="sh-right">database.py &nbsp;·&nbsp; DailyPrediction + PredictionItem 表</span>
+    </div>
+    <div class="section-body">
+
+      <div class="row row-center">
+
+        <div class="node n-m-rec">
+          <span class="node-role">数据库 · 每日一条记录</span>
+          <span class="node-name">DailyPrediction</span>
+          <span class="node-sub">date · prediction_en · prediction_cn</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-m-field">
+          <span class="node-role">追加</span>
+          <span class="node-name">量化叙述</span>
+          <span class="node-sub">追加在 LLM 文本之后<br>以 "---" 分隔，中英双语</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-m-rec">
+          <span class="node-role">数据库 · 每个标的一行</span>
+          <span class="node-name">PredictionItems</span>
+          <span class="node-sub">代码 · 方向 · 置信度 · 入场价<br>来源 · 全部因子评分<br>RSI · MACD · 置信区间</span>
+        </div>
+
+        <div class="arr">→</div>
+
+        <div class="node n-loop">
+          <span class="node-role">反馈循环 · 次日第 0 步</span>
+          <span class="node-name">结果验证</span>
+          <span class="node-sub">verify_prediction_items()<br>解析结果 → 重新拟合权重</span>
+        </div>
+
+      </div>
+
+      <div class="note-banner green">
+        <span class="note-icon">🔄</span>
+        <span>
+          所有 PredictionItem 均标注 <b>source</b>（"news_discovery" 或 "quant_v1"）和 <b>model_version</b>，
+          确保验证后的结果可追溯至产生它们的具体评分算法。
+          次日第 0 步将通过 <b>fit_weights_from_history()</b> 解析预测结果并重新拟合量化因子权重。
+        </span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══ LEGEND ══ -->
+  <div class="legend">
+    <div class="legend-title">图例</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#dbeafe"></div>输入数据</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#fef3c7"></div>处理步骤（LLM 路径）</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#f59e0b"></div>Claude · LLM 路径</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#fde68a"></div>数据库写入（LLM 路径）</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#e0e7ff"></div>处理步骤（量化路径）</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#6366f1"></div>Claude · 量化路径</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#c7d2fe"></div>因子权重 / 数据库写入（量化）</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#d1fae5"></div>合并 &amp; 保存</div>
+    <div class="legend-item"><div class="l-swatch" style="background:#f1f5f9"></div>反馈循环</div>
+  </div>
+
+</div>
+</body>
+</html>
